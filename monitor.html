@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Active Window Monitor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+      margin: 0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #4285F4;
+      margin-top: 0;
+    }
+    .status-container {
+      margin-bottom: 20px;
+      padding: 10px;
+      background-color: #e8f5e9;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .status-label {
+      font-weight: bold;
+      color: #2e7d32;
+    }
+    .status-time {
+      font-size: 14px;
+      color: #666;
+    }
+    .content-box {
+      border: 1px solid #ddd;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .url {
+      font-weight: bold;
+      word-break: break-all;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+      margin-bottom: 10px;
+    }
+    .text-preview {
+      font-size: 18px;
+      margin-bottom: 15px;
+    }
+    .full-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.5;
+      border: 1px solid #eee;
+      padding: 10px;
+      background-color: #fafafa;
+    }
+    .footer {
+      font-size: 14px;
+      color: #666;
+      margin-top: 20px;
+      text-align: center;
+    }
+    .refresh-button {
+      background-color: #4285F4;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .refresh-button:hover {
+      background-color: #3367d6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Active Window Monitor</h1>
+    
+    <div class="status-container">
+      <div class="status-label">Monitoring Active Window</div>
+      <div class="status-time">Last updated: <span id="lastUpdate">Just now</span></div>
+      <button id="refreshButton" class="refresh-button">Refresh Now</button>
+    </div>
+    
+    <div class="content-box">
+      <div class="url" id="activeUrl">Waiting for active window...</div>
+      <div class="text-preview" id="textPreview">Waiting for content...</div>
+      <div class="full-text" id="fullText">Detailed content will appear here...</div>
+    </div>
+    
+    <div class="footer">
+      This window shows the first 30 characters of text from your currently active window.
+      Updates automatically every 3 seconds.
+    </div>
+  </div>
+
+  <script src="monitor.js"></script>
+</body>
+</html>
