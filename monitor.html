@@ -10,7 +10,7 @@
       margin: 0;
     }
     .container {
-      max-width: 800px;
+      max-width: 850px;
       margin: 0 auto;
       background-color: #fff;
       padding: 20px;
@@ -20,23 +20,7 @@
     h1 {
       color: #4285F4;
       margin-top: 0;
-    }
-    .status-container {
       margin-bottom: 20px;
-      padding: 10px;
-      background-color: #e8f5e9;
-      border-radius: 4px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .status-label {
-      font-weight: bold;
-      color: #2e7d32;
-    }
-    .status-time {
-      font-size: 14px;
-      color: #666;
     }
     .content-box {
       border: 1px solid #ddd;
@@ -51,14 +35,50 @@
       border-bottom: 1px solid #eee;
       margin-bottom: 10px;
     }
+    .title {
+      font-size: 16px;
+      font-style: italic;
+      color: #666;
+      margin-bottom: 10px;
+    }
+    .screenshot-container {
+      margin: 15px 0;
+      padding: 10px;
+      border-radius: 4px;
+      background-color: #f7f7f7;
+    }
+    .screenshot-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .screenshot-title {
+      font-weight: bold;
+      color: #4285F4;
+    }
+    .screenshot-time {
+      font-size: 14px;
+      color: #666;
+    }
+    .screenshot-image {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #eee;
+      display: block;
+      margin: 0 auto;
+    }
     .text-preview {
       font-size: 18px;
+      margin-top: 15px;
       margin-bottom: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #eee;
     }
     .full-text {
       white-space: pre-wrap;
       word-break: break-word;
-      max-height: 300px;
+      max-height: 200px;
       overflow-y: auto;
       font-size: 14px;
       line-height: 1.5;
@@ -72,38 +92,34 @@
       margin-top: 20px;
       text-align: center;
     }
-    .refresh-button {
-      background-color: #4285F4;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .refresh-button:hover {
-      background-color: #3367d6;
-    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Active Window Monitor</h1>
     
-    <div class="status-container">
-      <div class="status-label">Monitoring Active Window</div>
-      <div class="status-time">Last updated: <span id="lastUpdate">Just now</span></div>
-      <button id="refreshButton" class="refresh-button">Refresh Now</button>
-    </div>
-    
     <div class="content-box">
+      <!-- URL and Title Section -->
       <div class="url" id="activeUrl">Waiting for active window...</div>
+      <div class="title" id="pageTitle">Waiting for title...</div>
+      
+      <!-- Screenshot Section -->
+      <div class="screenshot-container">
+        <div class="screenshot-header">
+          <div class="screenshot-title">Screenshot (Updates every 10 seconds)</div>
+          <div class="screenshot-time">Captured: <span id="screenshotTime">Waiting...</span></div>
+        </div>
+        <img id="screenshotImage" class="screenshot-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Waiting for screenshot...">
+      </div>
+      
+      <!-- Text Content Section -->
       <div class="text-preview" id="textPreview">Waiting for content...</div>
       <div class="full-text" id="fullText">Detailed content will appear here...</div>
     </div>
     
     <div class="footer">
-      This window shows the first 30 characters of text from your currently active window.
-      Updates automatically every 3 seconds.
+      This window shows text and screenshots from your currently active window.
+      Text updates every 3 seconds, screenshots every 10 seconds.
     </div>
   </div>
 

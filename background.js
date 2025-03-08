@@ -1,6 +1,7 @@
 // Track whether we've already opened a listening window
 let listeningWindowId = null;
-let listeningTabId = null;
+let monitorTabId = null;
+let analysisTabId = null;
 
 console.log("Background script loaded");
 
@@ -18,7 +19,8 @@ function checkForListeningWindow() {
       if (chrome.runtime.lastError) {
         // Window doesn't exist anymore
         listeningWindowId = null;
-        listeningTabId = null;
+        monitorTabId = null;
+        analysisTabId = null;
         resolve(false);
       } else {
         // Window still exists
@@ -28,25 +30,35 @@ function checkForListeningWindow() {
   });
 }
 
-// Create a new listening window with our custom HTML
+// Create a new listening window with our custom HTML tabs
 function createListeningWindow() {
   // Create a new window with a blank page
   chrome.windows.create({ 
     focused: true,
-    width: 800,
-    height: 600
+    width: 900,
+    height: 700
   }, (window) => {
     listeningWindowId = window.id;
     console.log("Created new listening window with ID:", listeningWindowId);
     
-    // Create a new tab with our monitor page
+    // Create the first tab with our monitor page
     chrome.tabs.create({ 
       windowId: window.id, 
       url: 'monitor.html',
       active: true 
     }, (tab) => {
-      listeningTabId = tab.id;
-      console.log("Created monitor tab with ID:", listeningTabId);
+      monitorTabId = tab.id;
+      console.log("Created monitor tab with ID:", monitorTabId);
+      
+      // Create the second tab with our analysis page
+      chrome.tabs.create({ 
+        windowId: window.id, 
+        url: 'analysis.html',
+        active: false 
+      }, (tab) => {
+        analysisTabId = tab.id;
+        console.log("Created analysis tab with ID:", analysisTabId);
+      });
     });
     
     // Store the window ID in local storage for persistence across browser sessions
@@ -73,27 +85,103 @@ function getPageContentScript() {
 let latestContent = {
   url: "",
   text: "Waiting for content...",
-  timestamp: Date.now()
+  timestamp: Date.now(),
+  screenshot: null
 };
+
+// Function to capture a screenshot of the active tab
+function captureScreenshot() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs.length > 0) {
+      const activeTab = tabs[0];
+      
+      // Skip monitoring our own tabs
+      if (activeTab.id === monitorTabId || activeTab.id === analysisTabId) return;
+      
+      chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+        if (chrome.runtime.lastError) {
+          console.error("Screenshot error:", chrome.runtime.lastError);
+          return;
+        }
+        
+        // Update the latest content with the screenshot
+        latestContent.screenshot = dataUrl;
+        latestContent.timestamp = Date.now();
+        
+        // Send the updated content to the monitor tab
+        updateMonitorTab(latestContent);
+      });
+    }
+  });
+}
 
 // Update the monitoring tab with new content
 function updateMonitorTab(content) {
-  if (!listeningTabId) return;
+  if (!monitorTabId) return;
   
-  latestContent = {
-    url: content.url,
-    text: content.text,
-    fullText: content.fullText,
-    timestamp: Date.now()
-  };
+  // Update our stored content object
+  if (content.url) latestContent.url = content.url;
+  if (content.text) latestContent.text = content.text;
+  if (content.fullText) latestContent.fullText = content.fullText;
+  if (content.title) latestContent.title = content.title;
+  if (content.screenshot) latestContent.screenshot = content.screenshot;
+  latestContent.timestamp = Date.now();
   
   // Send message to the monitor tab
-  chrome.tabs.sendMessage(listeningTabId, {
+  chrome.tabs.sendMessage(monitorTabId, {
     action: 'updateContent',
     data: latestContent
   }).catch(err => {
     console.log("Error sending to monitor tab:", err);
   });
+}
+
+// Function to force refresh data and capture new screenshot
+function forceRefresh() {
+  console.log("Force refresh requested");
+  
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs.length > 0) {
+      const currentTab = tabs[0];
+      
+      // Skip our monitor tabs
+      if (currentTab.id === monitorTabId || currentTab.id === analysisTabId) {
+        console.log("Can't refresh from our own tabs");
+        return;
+      }
+      
+      console.log("Forcing refresh for tab:", currentTab.url);
+      
+      // Only execute script on http/https pages
+      if (currentTab.url && (currentTab.url.startsWith('http://') || currentTab.url.startsWith('https://'))) {
+        // Execute content script to get page text
+        chrome.scripting.executeScript({
+          target: { tabId: currentTab.id },
+          function: getPageContentScript
+        }).then(results => {
+          if (results && results[0]) {
+            console.log("Refreshed content:", results[0].result.text);
+            updateMonitorTab(results[0].result);
+            // Also capture a fresh screenshot
+            captureScreenshot();
+          }
+        }).catch(err => {
+          console.error("Error executing script:", err);
+        });
+      } else {
+        // For non-http pages, just show the URL
+        updateMonitorTab({
+          url: currentTab.url || "unknown",
+          title: currentTab.title || "unknown",
+          text: "Cannot access content on this page type",
+          fullText: "Cannot access content on this page type"
+        });
+        captureScreenshot();
+      }
+    }
+  });
+  
+  return true;
 }
 
 // Monitor tab changes to print URL and content
@@ -106,8 +194,8 @@ function monitorActiveTabs() {
         return;
       }
       
-      // Skip the monitor tab itself
-      if (tab.id === listeningTabId) return;
+      // Skip the monitor tabs themselves
+      if (tab.id === monitorTabId || tab.id === analysisTabId) return;
       
       console.log("Active tab changed:", tab.url);
       
@@ -121,6 +209,7 @@ function monitorActiveTabs() {
           if (results && results[0]) {
             console.log("Active Window Content:", results[0].result.text);
             updateMonitorTab(results[0].result);
+            captureScreenshot();
           }
         }).catch(err => {
           console.error("Error executing script:", err);
@@ -129,9 +218,11 @@ function monitorActiveTabs() {
         // For non-http pages, just show the URL
         updateMonitorTab({
           url: tab.url || "unknown",
+          title: tab.title || "unknown",
           text: "Cannot access content on this page type",
           fullText: "Cannot access content on this page type"
         });
+        captureScreenshot();
       }
     });
   });
@@ -139,8 +230,8 @@ function monitorActiveTabs() {
   // Also listen for tab URL changes
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
-      // Skip our monitor tab
-      if (tabId === listeningTabId) return;
+      // Skip our monitor tabs
+      if (tabId === monitorTabId || tabId === analysisTabId) return;
       
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0] && tabs[0].id === tabId) {
@@ -156,6 +247,7 @@ function monitorActiveTabs() {
               if (results && results[0]) {
                 console.log("Active Window Content:", results[0].result.text);
                 updateMonitorTab(results[0].result);
+                captureScreenshot();
               }
             }).catch(err => {
               console.error("Error executing script:", err);
@@ -164,9 +256,11 @@ function monitorActiveTabs() {
             // For non-http pages, just show the URL
             updateMonitorTab({
               url: tab.url || "unknown",
+              title: tab.title || "unknown",
               text: "Cannot access content on this page type",
               fullText: "Cannot access content on this page type"
             });
+            captureScreenshot();
           }
         }
       });
@@ -179,8 +273,8 @@ function monitorActiveTabs() {
       if (tabs.length > 0) {
         const currentTab = tabs[0];
         
-        // Skip our monitor tab
-        if (currentTab.id === listeningTabId) return;
+        // Skip our monitor tabs
+        if (currentTab.id === monitorTabId || currentTab.id === analysisTabId) return;
         
         // Only execute script on http/https pages
         if (currentTab.url && (currentTab.url.startsWith('http://') || currentTab.url.startsWith('https://'))) {
@@ -200,6 +294,9 @@ function monitorActiveTabs() {
       }
     });
   }, 3000);
+  
+  // Set up screenshot capture every 10 seconds
+  setInterval(captureScreenshot, 10000);
 }
 
 // Listen for messages from content scripts
@@ -209,6 +306,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log("Text sample:", message.data.text);
   } else if (message.action === 'getLatestContent') {
     sendResponse(latestContent);
+    return true;
+  } else if (message.action === 'forceRefresh') {
+    const result = forceRefresh();
+    sendResponse({ success: result });
     return true;
   }
 });
@@ -248,7 +349,8 @@ chrome.windows.onRemoved.addListener((windowId) => {
   if (windowId === listeningWindowId) {
     console.log("Listening window was closed");
     listeningWindowId = null;
-    listeningTabId = null;
+    monitorTabId = null;
+    analysisTabId = null;
     chrome.storage.local.remove('listeningWindowId');
   }
 });

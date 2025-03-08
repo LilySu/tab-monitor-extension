@@ -2,11 +2,12 @@
     "manifest_version": 3,
     "name": "Active Window Monitor",
     "version": "1.0",
-    "description": "Monitors and displays text from the active browser window",
+    "description": "Monitors and displays text and screenshots from the active browser window",
     "permissions": [
       "tabs",
       "storage",
-      "scripting"
+      "scripting",
+      "activeTab"
     ],
     "host_permissions": [
       "<all_urls>"
@@ -30,7 +31,7 @@
     ],
     "web_accessible_resources": [
       {
-        "resources": ["monitor.html", "monitor.js"],
+        "resources": ["monitor.html", "monitor.js", "analysis.html", "analysis.js"],
         "matches": ["<all_urls>"]
       }
     ]

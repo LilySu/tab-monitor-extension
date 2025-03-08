@@ -1,11 +1,12 @@
 // JavaScript for the monitor.html page
 document.addEventListener('DOMContentLoaded', function() {
     // Get DOM elements
-    const lastUpdateElement = document.getElementById('lastUpdate');
     const activeUrlElement = document.getElementById('activeUrl');
+    const pageTitleElement = document.getElementById('pageTitle');
     const textPreviewElement = document.getElementById('textPreview');
     const fullTextElement = document.getElementById('fullText');
-    const refreshButton = document.getElementById('refreshButton');
+    const screenshotImage = document.getElementById('screenshotImage');
+    const screenshotTimeElement = document.getElementById('screenshotTime');
     
     // Function to format time
     function formatTime(timestamp) {
@@ -18,7 +19,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to update the UI with new content
     function updateContent(content) {
+      // Update text content
       activeUrlElement.textContent = content.url || 'Unknown URL';
+      pageTitleElement.textContent = content.title || 'No title available';
       textPreviewElement.textContent = content.text || 'No text available';
       
       if (content.fullText) {
@@ -27,7 +30,12 @@ document.addEventListener('DOMContentLoaded', function() {
         fullTextElement.textContent = 'Full text not available.';
       }
       
-      lastUpdateElement.textContent = formatTime(content.timestamp || Date.now());
+      // Update screenshot if available
+      if (content.screenshot) {
+        screenshotImage.src = content.screenshot;
+        screenshotImage.alt = "Screenshot of: " + (content.url || "active tab");
+        screenshotTimeElement.textContent = formatTime(content.timestamp || Date.now());
+      }
     }
     
     // Get initial content from background script
@@ -43,15 +51,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updateContent(message.data);
       }
       return true;
-    });
-    
-    // Manual refresh button
-    refreshButton.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ action: 'getLatestContent' }, (response) => {
-        if (response) {
-          updateContent(response);
-        }
-      });
     });
     
     console.log('Monitor page initialized');
