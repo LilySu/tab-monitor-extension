@@ -6,6 +6,7 @@ import traceback
 from pathlib import Path
 import base64
 import re
+<<<<<<< HEAD
 import urllib.parse
 import json
 import os
@@ -68,6 +69,8 @@ except Exception as e:
     get_environment_variable = fallback_get_environment_variable
     has_groq_wrapper = False
     load_environment_file()
+=======
+>>>>>>> a440591 (Groq can read images)
 
 # Add the repository root to the Python path
 # Assuming mock_analysis_server.py is one level deep from repo root
