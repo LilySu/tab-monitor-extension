@@ -92,33 +92,12 @@
       margin-top: 20px;
       text-align: center;
     }
-    .action-buttons {
-      display: flex;
-      gap: 10px;
-      margin: 15px 0;
-      justify-content: center;
-    }
-    .action-button {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: background-color 0.2s;
-    }
-    .refresh-button {
-      background-color: #4285F4;
-      color: white;
-    }
-    .refresh-button:hover {
-      background-color: #3367d6;
-    }
     .auto-update-note {
       font-size: 12px;
       color: #666;
       text-align: center;
       font-style: italic;
-      margin-top: 5px;
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -131,11 +110,8 @@
       <div class="url" id="activeUrl">Waiting for active window...</div>
       <div class="title" id="pageTitle">Waiting for title...</div>
       
-      <!-- Action Buttons -->
-      <div class="action-buttons">
-        <button id="refreshBtn" class="action-button refresh-button">Refresh</button>
-      </div>
-      <div class="auto-update-note">Insights tab automatically updates when screenshot changes</div>
+      <!-- Auto-update Note -->
+      <div class="auto-update-note">Insights tab automatically updates when content changes</div>
       
       <!-- Screenshot Section -->
       <div class="screenshot-container">

@@ -8,24 +8,70 @@ import base64
 import re
 import urllib.parse
 import json
+import os
 
-# Add the repository root to the Python path
-# Assuming mock_analysis_server.py is one level deep from repo root
-file_path = Path(__file__).resolve()  # Get the absolute path of the current file
-repo_root = file_path.parent.parent   # Go up one level to get repo root
-sys.path.insert(0, str(repo_root))    # Add repo root to Python path
+# Set up a fallback environment variable loader in case the import fails
+def fallback_load_environment_file():
+    """Load environment variables from .env file (fallback implementation)"""
+    print("Using fallback environment loader")
+    env_path = Path('.env')
+    if env_path.exists():
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                key, value = line.split('=', 1)
+                os.environ[key] = value
+                print(f"Loaded environment variable: {key}")
+    else:
+        print("No .env file found")
 
-# Now we can import modules from pytabmonitor
-from pytabmonitor.Utilities.load_environment_file import (
-    load_environment_file,
-    get_environment_variable)
-from pytabmonitor.GroqAPIWrappers.GroqAPIWrapper import GroqAPIWrapper
+def fallback_get_environment_variable(name, default=None):
+    """Get an environment variable (fallback implementation)"""
+    return os.environ.get(name, default)
 
-# Load environment variables from .env file
-load_environment_file()
+# Try to import from the repository or use the fallback
+try:
+    # Add the repository root to the Python path
+    # Assuming mock_analysis_server.py is one level deep from repo root
+    file_path = Path(__file__).resolve()  # Get the absolute path of the current file
+    repo_root = file_path.parent.parent   # Go up one level to get repo root
+    sys.path.insert(0, str(repo_root))    # Add repo root to Python path
+    
+    # Try to import modules from pytabmonitor
+    try:
+        from pytabmonitor.Utilities.load_environment_file import (
+            load_environment_file,
+            get_environment_variable)
+        print("Successfully imported load_environment_file from pytabmonitor")
+    except ImportError:
+        print("Could not import from pytabmonitor.Utilities, using fallback")
+        load_environment_file = fallback_load_environment_file
+        get_environment_variable = fallback_get_environment_variable
+    
+    try:
+        from pytabmonitor.GroqAPIWrappers.GroqAPIWrapper import GroqAPIWrapper
+        print("Successfully imported GroqAPIWrapper from pytabmonitor")
+        has_groq_wrapper = True
+    except ImportError:
+        print("Could not import GroqAPIWrapper, will use mock responses only")
+        has_groq_wrapper = False
+        
+    # Load environment variables from .env file
+    load_environment_file()
+    
+except Exception as e:
+    print(f"Error setting up imports: {e}")
+    print("Using fallback implementations")
+    load_environment_file = fallback_load_environment_file
+    get_environment_variable = fallback_get_environment_variable
+    has_groq_wrapper = False
+    load_environment_file()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS so the Chrome extension can access this server
+
 
 # Track already analyzed URLs to avoid duplicate API calls
 analyzed_urls = {}
@@ -210,29 +256,70 @@ def stock_research():
     # If GroqAPIWrapper is available, use it for analysis
     if groq_api_wrapper:
         try:
-            # System message with instructions
+            # System message with improved instructions
             system_message = create_system_message(
-                "You are a financial and technical researcher that analyzes websites. "
-                "Your primary task is to determine if a website is related to a publicly traded company, "
-                "and if so, provide relevant financial information and SEC filings. "
-                "For non-company websites, you provide technical analysis and deep research."
+                "You are an expert financial and technical researcher specializing in company stock analysis and deep research. "
+                "Your task is to analyze a website URL and provide detailed, structured information."
             )
             
-            # User message with the URL to analyze
+            # Enhanced user message with more specific instructions
             user_message = create_user_message(
-                f"Please analyze this URL: {clean_url}\n\n"
-                "First, determine if this website is related to a publicly traded company:\n"
-                "1. Check if you can identify a stock ticker symbol from the domain or URL\n"
-                "2. Verify if the company is publicly traded\n\n"
-                "If it is a publicly traded company:\n"
-                "- Provide the stock ticker symbol and exchange\n"
-                "- Summarize recent important SEC filings (10-K, 8-K, 10-Q, Forms 3-4-5, Schedule 13D)\n"
-                "- Include key financial information\n\n"
-                "If it is NOT a publicly traded company:\n"
-                "- Identify what type of content/organization the website represents\n"
-                "- Provide technical details and deep research about the subject\n"
-                "- Focus on documentation, resources, and technical knowledge\n\n"
-                "Format your response in clear sections with headers."
+                f"Analyze this URL thoroughly: {clean_url}\n\n"
+                "STEP 1: Determine if this website is related to a publicly traded company.\n"
+                "- Look for company names, corporate domains, product references\n"
+                "- Check if there are hints of stock market presence\n\n"
+                "STEP 2: If it IS a publicly traded company:\n"
+                "- Identify and prominently display the stock ticker symbol and exchange\n"
+                "- Find the most recent SEC filings (focus on Form 10-K, Form 10-Q, Form 8-K)\n"
+                "- Extract key financial data: revenue, profit margins, EPS, market cap\n"
+                "- Identify primary business segments and growth areas\n"
+                "- Report any recent significant news or developments\n\n"
+                "STEP 3: If it is NOT a publicly traded company:\n"
+                "- Determine the entity type (private company, non-profit, government, educational, etc.)\n"
+                "- Conduct deep research using 'sonar-deep-research' methodology:\n"
+                "  * Find research papers, technical documentation, or whitepapers\n"
+                "  * Discover most upvoted content on Reddit, Quora, Twitter, TikTok\n"
+                "  * Identify mentions in major publications (The Atlantic, Washington Post, NYT, etc.)\n"
+                "  * Look for industry associations, competitors, and market position\n"
+                "  * Analyze technical aspects, innovations, or specialized knowledge\n\n"
+                "FORMAT YOUR RESPONSE AS FOLLOWS:\n"
+                "1. For public companies:\n"
+                "```\n"
+                "# [TICKER]: [COMPANY NAME]\n\n"
+                "## Company Overview\n"
+                "[Brief description, 1-2 sentences]\n\n"
+                "**Exchange:** [Exchange name]\n"
+                "**Industry:** [Primary industry]\n\n"
+                "## Recent SEC Filings\n"
+                "- Most recent 10-K: [Date, key points]\n"
+                "- Most recent 10-Q: [Date, key points]\n"
+                "- Recent 8-K: [Date, purpose]\n\n"
+                "## Financial Highlights\n"
+                "- Revenue: [Amount] ([Period])\n"
+                "- [Other key metrics]\n\n"
+                "## Business Segments\n"
+                "- [List key segments]\n\n"
+                "## Recent Developments\n"
+                "- [List recent news]\n"
+                "```\n\n"
+                "2. For non-public entities:\n"
+                "```\n"
+                "# [ENTITY NAME]: [ENTITY TYPE]\n\n"
+                "## Overview\n"
+                "[Brief description, 2-3 sentences]\n\n"
+                "## Key Research & Resources\n"
+                "- Research Papers: [List notable papers]\n"
+                "- Technical Documentation: [List key resources]\n"
+                "- Community Insights: [Reddit, Quora, social media highlights]\n\n"
+                "## Industry Position\n"
+                "- Competitors: [List main competitors]\n"
+                "- Market Focus: [Describe target market/users]\n\n"
+                "## Technical Analysis\n"
+                "- [Key technical aspects]\n\n"
+                "## Media Coverage\n"
+                "- [Notable mentions in publications]\n"
+                "```\n\n"
+                "Ensure your analysis is comprehensive but concise. Always provide valuable information regardless of entity type."
             )
             
             # Create messages array
@@ -285,258 +372,126 @@ def stock_research():
                 "analysis": f"Error analyzing URL: {error_detail}"
             })
     
-    # Fallback to mock response
+    # Fallback to improved mock response
     print("Using mock response for URL analysis (Groq API unavailable)")
     time.sleep(1)  # Simulate processing time
     
-    # Generate a custom mock response based on the domain
-    company_name = None
-    ticker = None
-    exchange = None
+    # Generate an enhanced custom mock response based on the domain
     mock_response = ""
     
     if "nvidia.com" in domain:
-        company_name = "NVIDIA Corporation"
-        ticker = "NVDA"
-        exchange = "NASDAQ"
-        mock_response = f"""## Company Analysis
+        mock_response = """# NVDA: NVIDIA Corporation
 
-The website {url} is related to NVIDIA Corporation, which is publicly traded.
+## Company Overview
+NVIDIA is a global technology company specializing in GPUs, AI, and accelerated computing solutions.
 
-Stock Ticker Symbol: NVDA
-Exchange: NASDAQ
+**Exchange:** NASDAQ
+**Industry:** Semiconductors, Computer Hardware
 
-### Recent SEC Filings
-- 10-K: Filed on February 22, 2023, for the fiscal year ended January 29, 2023
-- 10-Q: Filed on November 22, 2022, for the quarterly period ended October 30, 2022
-- 8-K: Filed on February 22, 2023, announcing Q4 financial results
-- Forms 3-4-5: Multiple insider transactions reported in January 2023
-- Schedule 13D: Major ownership position reported by institutional investors
+## Recent SEC Filings
+- Most recent 10-K: February 21, 2024 (FY ended January 28, 2024) - Record revenue of $60.92B, up 126% from previous year
+- Most recent 10-Q: November 21, 2023 (Q3 FY 2024) - Revenue of $18.12B, up 206% from previous year
+- Recent 8-K: February 21, 2024 - Announcing Q4 and FY 2024 financial results
 
-### Financial Information
-- Revenue: $26.91 billion (FY 2023)
-- Net Income: $9.75 billion (FY 2023)
-- Market Capitalization: Approximately $601 billion
-- EPS: $3.90 (FY 2023)
+## Financial Highlights
+- Revenue: $60.92 billion (FY 2024)
+- Net Income: $29.76 billion (FY 2024)
+- Gross Margin: 74.2% (FY 2024)
+- EPS: $12.03 (FY 2024)
+- Market Capitalization: ~$2.2 trillion
 
-### Key Business Segments
-- Gaming GPUs
-- Data Center & AI
-- Professional Visualization
-- Automotive"""
+## Business Segments
+- Data Center (AI, Cloud Computing)
+- Gaming (GeForce GPUs)
+- Professional Visualization (Workstation Graphics)
+- Automotive (Self-driving Vehicle Technology)
+
+## Recent Developments
+- Released Blackwell GPU architecture for AI computing
+- Expanding manufacturing partnerships to meet AI chip demand
+- Announced new enterprise AI solutions and partnerships
+- Continuing development of omniverse platform for industrial metaverse applications"""
     
-    elif "apple.com" in domain:
-        company_name = "Apple Inc."
-        ticker = "AAPL"
-        exchange = "NASDAQ"
-        mock_response = f"""## Company Analysis
+    elif "python.org" in domain:
+        mock_response = """# Python Software Foundation: Non-profit Organization
 
-The website {url} is related to Apple Inc., which is publicly traded.
+## Overview
+Python.org is the official website of the Python programming language, maintained by the Python Software Foundation (PSF). Python is one of the world's most popular programming languages, known for its readability and versatility.
 
-Stock Ticker Symbol: AAPL
-Exchange: NASDAQ
+## Key Research & Resources
+- Research Papers: "Python in Scientific Computing" (Nature Methods), "Python in Data Science" (Various academic publications)
+- Technical Documentation: Comprehensive Python Language Reference, Library References, Python Enhancement Proposals (PEPs)
+- Community Insights: r/Python (960K+ members), extensive Stack Overflow presence (1.9M+ questions), active Python Discord communities
 
-### Recent SEC Filings
-- 10-K: Filed on October 28, 2022, for the fiscal year ended September 24, 2022
-- 10-Q: Filed on February 3, 2023, for the quarter ended December 31, 2022
-- 8-K: Filed on February 2, 2023, announcing Q1 2023 financial results
-- Forms 3-4-5: Multiple insider transactions reported in December 2022
-- Schedule 13D: Several institutional ownership changes reported in Q4 2022
+## Industry Position
+- Competitors: Other programming languages (JavaScript, Java, C++, R, Go)
+- Market Focus: Developers, data scientists, educators, researchers, enterprise organizations
 
-### Financial Information
-- Revenue: $394.33 billion (FY 2022)
-- Net Income: $99.8 billion (FY 2022)
-- Market Capitalization: Approximately $2.3 trillion
-- EPS: $6.11 (FY 2022)
+## Technical Analysis
+- Current stable release: Python 3.12
+- Key features: Dynamic typing, comprehensive standard library, extensive third-party package ecosystem
+- Implementation variants: CPython (standard), PyPy, Jython, IronPython
+- Growing applications in AI/ML, data science, web development, automation, and systems programming
 
-### Key Business Segments
-- iPhone
-- Mac
-- iPad
-- Wearables, Home, and Accessories
-- Services"""
+## Media Coverage
+- Featured in IEEE Spectrum's top programming languages
+- Regular coverage in TechCrunch, The Verge, and technology publications
+- Highlighted in academic journals for scientific computing applications
+- Frequently mentioned in business publications for enterprise adoption"""
     
-    elif "microsoft.com" in domain:
-        company_name = "Microsoft Corporation"
-        ticker = "MSFT"
-        exchange = "NASDAQ"
-        mock_response = f"""## Company Analysis
+    elif "claude.ai" in domain:
+        mock_response = """# Anthropic: Private AI Company
 
-The website {url} is related to Microsoft Corporation, which is publicly traded.
+## Overview
+Claude.ai is the website for Claude, an AI assistant developed by Anthropic. Anthropic is a private AI safety company founded in 2021 focused on developing reliable, interpretable, and steerable AI systems.
 
-Stock Ticker Symbol: MSFT
-Exchange: NASDAQ
+## Key Research & Resources
+- Research Papers: "Constitutional AI" (2022), "Training language models to follow instructions" (2022), "Discovering Language Model Behaviors" (2023)
+- Technical Documentation: Claude system cards, model specifications, safety benchmarking reports
+- Community Insights: r/AnthropicAI (40K+ members), popular discussions on Hacker News and AI forums
 
-### Recent SEC Filings
-- 10-K: Filed on July 28, 2022, for the fiscal year ended June 30, 2022
-- 10-Q: Filed on January 24, 2023, for the quarter ended December 31, 2022
-- 8-K: Filed on January 24, 2023, announcing Q2 fiscal year 2023 results
-- Forms 3-4-5: Multiple insider transactions reported in November 2022
-- Schedule 13D: Several institutional ownership changes reported in Q4 2022
+## Industry Position
+- Competitors: OpenAI (ChatGPT), Google (Bard/Gemini), Cohere, Microsoft
+- Market Focus: Enterprise AI solutions, researchers, developers, general consumers
 
-### Financial Information
-- Revenue: $198.27 billion (FY 2022)
-- Net Income: $72.74 billion (FY 2022)
-- Market Capitalization: Approximately $1.8 trillion
-- EPS: $9.65 (FY 2022)
+## Technical Analysis
+- Current models: Claude 3 family (Haiku, Sonnet, Opus)
+- Key capabilities: Natural language understanding, contextual comprehension, reduced hallucinations
+- Technical approach: Constitutional AI methodology, RLHF, frontier model safety research
+- API availability with extensive documentation for developers
 
-### Key Business Segments
-- Productivity and Business Processes
-- Intelligent Cloud (including Azure)
-- Personal Computing"""
-    
-    elif "meta.com" in domain or "facebook.com" in domain:
-        company_name = "Meta Platforms, Inc."
-        ticker = "META"
-        exchange = "NASDAQ"
-        mock_response = f"""## Company Analysis
-
-The website {url} is related to Meta Platforms, Inc. (formerly Facebook, Inc.), which is publicly traded.
-
-Stock Ticker Symbol: META
-Exchange: NASDAQ
-
-### Recent SEC Filings
-- 10-K: Filed on February 2, 2023, for the fiscal year ended December 31, 2022
-- 10-Q: Filed on October 27, 2022, for the quarter ended September 30, 2022
-- 8-K: Filed on February 1, 2023, announcing Q4 and full-year 2022 results
-- Forms 3-4-5: Multiple insider transactions reported in December 2022
-- Schedule 13D: Several institutional ownership changes reported in Q4 2022
-
-### Financial Information
-- Revenue: $116.61 billion (FY 2022)
-- Net Income: $23.20 billion (FY 2022)
-- Market Capitalization: Approximately $450 billion
-- EPS: $8.59 (FY 2022)
-
-### Key Business Segments
-- Facebook
-- Instagram
-- WhatsApp
-- Messenger
-- Reality Labs (VR/AR)"""
-    
-    elif "amazon.com" in domain:
-        company_name = "Amazon.com, Inc."
-        ticker = "AMZN"
-        exchange = "NASDAQ"
-        mock_response = f"""## Company Analysis
-
-The website {url} is related to Amazon.com, Inc., which is publicly traded.
-
-Stock Ticker Symbol: AMZN
-Exchange: NASDAQ
-
-### Recent SEC Filings
-- 10-K: Filed on February 3, 2023, for the fiscal year ended December 31, 2022
-- 10-Q: Filed on October 28, 2022, for the quarter ended September 30, 2022
-- 8-K: Filed on February 2, 2023, announcing Q4 and full-year 2022 results
-- Forms 3-4-5: Multiple insider transactions reported in November 2022
-- Schedule 13D: Several institutional ownership changes reported in Q4 2022
-
-### Financial Information
-- Revenue: $513.98 billion (FY 2022)
-- Net Income: -$2.72 billion (FY 2022)
-- Market Capitalization: Approximately $970 billion
-- EPS: -$0.27 (FY 2022)
-
-### Key Business Segments
-- North America
-- International
-- AWS (Amazon Web Services)"""
-    
-    elif "google.com" in domain or "alphabet.com" in domain:
-        company_name = "Alphabet Inc."
-        ticker = "GOOGL"
-        exchange = "NASDAQ"
-        mock_response = f"""## Company Analysis
-
-The website {url} is related to Alphabet Inc. (parent company of Google), which is publicly traded.
-
-Stock Ticker Symbol: GOOGL (Class A), GOOG (Class C)
-Exchange: NASDAQ
-
-### Recent SEC Filings
-- 10-K: Filed on February 3, 2023, for the fiscal year ended December 31, 2022
-- 10-Q: Filed on October 25, 2022, for the quarter ended September 30, 2022
-- 8-K: Filed on February 2, 2023, announcing Q4 and fiscal year 2022 results
-- Forms 3-4-5: Multiple insider transactions reported in December 2022
-- Schedule 13D: Several institutional ownership changes reported in Q4 2022
-
-### Financial Information
-- Revenue: $282.84 billion (FY 2022)
-- Net Income: $59.97 billion (FY 2022)
-- Market Capitalization: Approximately $1.2 trillion
-- EPS: $4.56 (FY 2022)
-
-### Key Business Segments
-- Google Services (Search, Android, Chrome, YouTube)
-- Google Cloud
-- Other Bets (early-stage technologies)"""
-    
-    elif "twitter.com" in domain:
-        company_name = "Twitter, Inc. (Now private under X Corp)"
-        ticker = "Private (formerly TWTR)"
-        exchange = "Private (formerly NYSE)"
-        mock_response = f"""## Company Analysis
-
-The website {url} is related to Twitter (now X Corp). Twitter was previously publicly traded as Twitter, Inc. under the ticker symbol TWTR on the NYSE, but was taken private by Elon Musk in October 2022.
-
-Stock Ticker Symbol: Private (formerly TWTR)
-Exchange: Private (formerly NYSE)
-
-### Recent Information
-- Twitter was acquired by Elon Musk for approximately $44 billion
-- The company is now privately held and no longer files SEC reports
-- The platform has been rebranded as "X"
-
-### Historical Information
-- Revenue: $5.08 billion (FY 2021, last full year as public company)
-- Net Income: -$221 million (FY 2021)
-- Acquisition price: $54.20 per share
-
-### Key Business
-- Social media platform
-- Advertising services
-- Data licensing"""
-    
-    elif "github.com" in domain or "python.org" in domain or "stackoverflow.com" in domain:
-        mock_response = f"""## Technical Resource Analysis
-
-The website {url} is not associated with a publicly traded company.
-
-### Website Category
-Developer/Technical Documentation
-
-### Key Resources
-- Technical documentation and code repositories
-- Community resources and knowledge base
-- Learning materials and references
-
-### Technical Details
-- Primary technologies: Web development, programming tools
-- Main audience: Software developers, engineers, technical professionals
-- Provides extensive documentation and community support"""
+## Media Coverage
+- Featured in New York Times, Wall Street Journal, MIT Technology Review
+- Significant venture funding rounds reported in TechCrunch and Bloomberg
+- Academic citations in AI safety and alignment literature
+- Growing presence in enterprise AI adoption discussions"""
     
     else:
-        mock_response = f"""## Website Analysis: {domain}
+        mock_response = f"""# {domain}: General Website
 
-After analyzing this URL, I found no clear indication that it's associated with a publicly traded company.
+## Overview
+This website does not appear to be associated with a publicly traded company. After thorough analysis, I could not definitively determine the nature of this entity based on the URL alone.
 
-### Website Overview
-- Type: General website
-- Category: Could not determine definitively
-- No stock ticker symbol identified
+## Key Research & Resources
+- Research Papers: No significant academic citations found
+- Technical Documentation: Limited public technical resources identified
+- Community Insights: Minimal presence on major discussion platforms
 
-### Content Analysis
-- Website appears to contain general information
-- No definitive SEC filings or stock information available
-- Would need deeper analysis to determine specific subject matter
+## Industry Position
+- Competitors: Unable to determine from available information
+- Market Focus: Requires further investigation
 
-### Recommendation
-For more accurate analysis, you may want to use a specialized financial database or search for company information directly."""
+## Technical Analysis
+- Website appears to serve general content
+- More detailed technical analysis would require direct examination of the site
+
+## Media Coverage
+- No significant mentions in major publications identified
+- Consider visiting the website directly for more information about its purpose and offerings
+
+For more accurate analysis, additional information about the website or organization would be needed."""
     
-    # Save this mock response to the cache
+    # Save this enhanced mock response to the cache
     analyzed_urls[clean_url] = mock_response
     
     # Try to save to file

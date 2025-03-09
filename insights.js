@@ -40,54 +40,77 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to format the research results into a nicely structured HTML output
     function formatResearchResults(data, url) {
-      // Check if this is a stock analysis result
-      if (data.includes("Stock Ticker Symbol") || data.includes("NASDAQ") || data.includes("NYSE")) {
-        try {
-          // Extract company name
-          let companyName = "Company";
-          if (data.includes("is related to")) {
-            const nameMatch = data.match(/is related to ([^,]+),/);
-            if (nameMatch && nameMatch[1]) {
-              companyName = nameMatch[1];
-            }
+      try {
+        // First, detect if this is a publicly traded company or not
+        const isPublicCompany = data.includes("Stock Ticker Symbol") || 
+                                data.includes("NASDAQ:") || 
+                                data.includes("NYSE:") || 
+                                (data.includes("Exchange:") && !data.includes("Exchange: N/A"));
+        
+        // Parse entity name and type
+        let entityName = "Unknown Entity";
+        let entityType = "Unknown Type";
+        
+        // Extract headers to determine company/entity name and type
+        const headerMatch = data.match(/# ([^:]+):(.*)/);
+        if (headerMatch) {
+          entityName = headerMatch[1].trim();
+          entityType = headerMatch[2].trim();
+        } else {
+          // Alternative pattern for public companies
+          const publicMatch = data.match(/# ([^:]+):/);
+          if (publicMatch) {
+            entityName = publicMatch[1].trim();
+            entityType = "Public Company";
+          } else {
+            // Last resort - extract domain name
+            const urlObj = new URL(url);
+            entityName = urlObj.hostname.replace(/^www\./, '');
           }
+        }
+        
+        // Start building HTML output
+        let html = `<div class="company-header">${entityName}</div>`;
+                
+        // Add overview section
+        html += `<div class="section-header">Overview</div>
+        <table>
+          <tr>
+            <th>Website</th>
+            <td><a href="${url}" target="_blank">${url}</a></td>
+          </tr>`;
           
+        if (isPublicCompany) {
           // Extract ticker symbol
           let tickerSymbol = "N/A";
-          const tickerMatch = data.match(/Stock Ticker Symbol[^\w]+([A-Z]+)/);
+          const tickerMatch = data.match(/[Tt]icker[^\w]+([A-Z]+)/);
           if (tickerMatch && tickerMatch[1]) {
             tickerSymbol = tickerMatch[1];
           }
           
           // Extract exchange
           let exchange = "N/A";
-          const exchangeMatch = data.match(/Exchange[^\w]+(NASDAQ|NYSE|AMEX|OTC)/);
+          const exchangeMatch = data.match(/[Ee]xchange[^\w]+(NASDAQ|NYSE|AMEX|OTC)/);
           if (exchangeMatch && exchangeMatch[1]) {
             exchange = exchangeMatch[1];
           }
           
-          // Start building the HTML output
-          let html = `
-            <div class="company-header">${companyName} (${tickerSymbol}: ${exchange})</div>
-            
-            <div class="section-header">Company Overview</div>
-            <table>
-              <tr>
-                <th>Website</th>
-                <td><a href="${url}" target="_blank">${url}</a></td>
-              </tr>
-              <tr>
-                <th>Ticker</th>
-                <td>${tickerSymbol}</td>
-              </tr>
-              <tr>
-                <th>Exchange</th>
-                <td>${exchange}</td>
-              </tr>
-            </table>
-          `;
+          html += `
+          <tr>
+            <th>Type</th>
+            <td>Publicly Traded Company</td>
+          </tr>
+          <tr>
+            <th>Ticker</th>
+            <td>${tickerSymbol}</td>
+          </tr>
+          <tr>
+            <th>Exchange</th>
+            <td>${exchange}</td>
+          </tr>
+          </table>`;
           
-          // Add SEC Filings section
+          // Add SEC Filings section for public companies
           html += `<div class="section-header">SEC Filings</div>
           <table>
             <tr>
@@ -106,7 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>10-K</td>
                 <td>${tenKDate}</td>
                 <td>Annual Report</td>
-                <td><a href="https://www.sec.gov/edgar/search/#/entityName=${companyName}" target="_blank">View</a></td>
+                <td><a href="https://www.sec.gov/edgar/search/#/entityName=${entityName}" target="_blank">View</a></td>
               </tr>`;
           }
           
@@ -119,7 +142,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>10-Q</td>
                 <td>${tenQDate}</td>
                 <td>Quarterly Report</td>
-                <td><a href="https://www.sec.gov/edgar/search/#/entityName=${companyName}" target="_blank">View</a></td>
+                <td><a href="https://www.sec.gov/edgar/search/#/entityName=${entityName}" target="_blank">View</a></td>
               </tr>`;
           }
           
@@ -130,74 +153,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>8-K</td>
                 <td>Various</td>
                 <td>Current Reports</td>
-                <td><a href="https://www.sec.gov/edgar/search/#/entityName=${companyName}" target="_blank">View</a></td>
-              </tr>`;
-          }
-          
-          // Forms 3-4-5
-          if (data.includes("Forms 3-4-5") || data.includes("Insider Transactions")) {
-            html += `
-              <tr>
-                <td>Forms 3-4-5</td>
-                <td>Various</td>
-                <td>Insider Transactions</td>
-                <td><a href="https://www.sec.gov/edgar/search/#/entityName=${companyName}&category=form-cat1" target="_blank">View</a></td>
-              </tr>`;
-          }
-          
-          // Add Schedule 13D
-          if (data.includes("Schedule 13D") || data.includes("Beneficial Ownership")) {
-            html += `
-              <tr>
-                <td>Schedule 13D</td>
-                <td>Various</td>
-                <td>Beneficial Ownership</td>
-                <td><a href="https://www.sec.gov/edgar/search/#/entityName=${companyName}&category=form-cat2" target="_blank">View</a></td>
+                <td><a href="https://www.sec.gov/edgar/search/#/entityName=${entityName}" target="_blank">View</a></td>
               </tr>`;
           }
           
           html += `</table>`;
           
-          // Add Financial Information section if present
-          if (data.includes("Financial") || data.includes("Revenue") || data.includes("Income")) {
-            html += `<div class="section-header">Financial Highlights</div>
-            <table>
-              <tr>
-                <th>Metric</th>
-                <th>Value</th>
-              </tr>`;
-            
-            // Extract Revenue if present
-            if (data.includes("Revenue")) {
-              html += `
-                <tr>
-                  <td>Revenue</td>
-                  <td>See <a href="https://finance.yahoo.com/quote/${tickerSymbol}" target="_blank">Yahoo Finance</a> for latest data</td>
-                </tr>`;
-            }
-            
-            // Extract Net Income if present
-            if (data.includes("Income")) {
-              html += `
-                <tr>
-                  <td>Net Income</td>
-                  <td>See <a href="https://finance.yahoo.com/quote/${tickerSymbol}" target="_blank">Yahoo Finance</a> for latest data</td>
-                </tr>`;
-            }
-            
-            // Extract Market Cap if present
-            if (data.includes("Market Cap")) {
-              html += `
-                <tr>
-                  <td>Market Cap</td>
-                  <td>See <a href="https://finance.yahoo.com/quote/${tickerSymbol}" target="_blank">Yahoo Finance</a> for latest data</td>
-                </tr>`;
-            }
-            
-            html += `</table>`;
-          }
+          // Add Financial Information section
+          html += `<div class="section-header">Financial Highlights</div>
+          <table>
+            <tr>
+              <th>Metric</th>
+              <th>Value</th>
+            </tr>
+            <tr>
+              <td>Revenue</td>
+              <td>See <a href="https://finance.yahoo.com/quote/${tickerSymbol}" target="_blank">Yahoo Finance</a> for latest data</td>
+            </tr>
+            <tr>
+              <td>Net Income</td>
+              <td>See <a href="https://finance.yahoo.com/quote/${tickerSymbol}" target="_blank">Yahoo Finance</a> for latest data</td>
+            </tr>
+            <tr>
+              <td>Market Cap</td>
+              <td>See <a href="https://finance.yahoo.com/quote/${tickerSymbol}" target="_blank">Yahoo Finance</a> for latest data</td>
+            </tr>
+          </table>`;
           
-          // Add links to external resources
+          // Add External Resources section for public companies
           html += `
             <div class="section-header">External Resources</div>
             <table>
@@ -207,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
               </tr>
               <tr>
                 <td>SEC EDGAR Database</td>
-                <td><a href="https://www.sec.gov/edgar/searchedgar/companysearch" target="_blank">Search for ${companyName}</a></td>
+                <td><a href="https://www.sec.gov/edgar/searchedgar/companysearch" target="_blank">Search for ${entityName}</a></td>
               </tr>
               <tr>
                 <td>Yahoo Finance</td>
@@ -217,17 +200,138 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>Company IR Page</td>
                 <td><a href="${url.split('/').slice(0, 3).join('/')}/investors" target="_blank">Investor Relations</a></td>
               </tr>
-            </table>
-          `;
+            </table>`;
           
-          return html;
-        } catch (error) {
-          console.error("Error formatting research results:", error);
-          // If there's an error in formatting, return the original data
-          return `<pre>${data}</pre>`;
+        } else {
+          // Non-public company formatting
+          html += `
+          <tr>
+            <th>Type</th>
+            <td>${entityType}</td>
+          </tr>
+          </table>`;
+          
+          // Parse key research & resources section
+          html += `<div class="section-header">Key Research & Resources</div>
+          <table>
+            <tr>
+              <th>Category</th>
+              <th>Sources</th>
+            </tr>`;
+            
+          // Research papers
+          if (data.includes("Research Papers")) {
+            const papersMatch = data.match(/Research Papers:([^\n]+)/);
+            const papers = papersMatch ? papersMatch[1].trim() : "No significant research papers found";
+            html += `
+              <tr>
+                <td>Research Papers</td>
+                <td>${papers}</td>
+              </tr>`;
+          }
+          
+          // Technical documentation
+          if (data.includes("Technical Documentation")) {
+            const docsMatch = data.match(/Technical Documentation:([^\n]+)/);
+            const docs = docsMatch ? docsMatch[1].trim() : "Limited technical documentation available";
+            html += `
+              <tr>
+                <td>Documentation</td>
+                <td>${docs}</td>
+              </tr>`;
+          }
+          
+          // Community insights
+          if (data.includes("Community Insights")) {
+            const insightsMatch = data.match(/Community Insights:([^\n]+)/);
+            const insights = insightsMatch ? insightsMatch[1].trim() : "Limited community discussion found";
+            html += `
+              <tr>
+                <td>Community</td>
+                <td>${insights}</td>
+              </tr>`;
+          }
+          
+          html += `</table>`;
+          
+          // Industry position section
+          html += `<div class="section-header">Industry Position</div>
+          <table>
+            <tr>
+              <th>Category</th>
+              <th>Details</th>
+            </tr>`;
+            
+          // Competitors
+          if (data.includes("Competitors")) {
+            const competitorsMatch = data.match(/Competitors:([^\n]+)/);
+            const competitors = competitorsMatch ? competitorsMatch[1].trim() : "Unknown competitors";
+            html += `
+              <tr>
+                <td>Competitors</td>
+                <td>${competitors}</td>
+              </tr>`;
+          }
+          
+          // Market focus
+          if (data.includes("Market Focus")) {
+            const marketMatch = data.match(/Market Focus:([^\n]+)/);
+            const market = marketMatch ? marketMatch[1].trim() : "Unknown market focus";
+            html += `
+              <tr>
+                <td>Target Market</td>
+                <td>${market}</td>
+              </tr>`;
+          }
+          
+          html += `</table>`;
+          
+          // External Resources section for non-public entities
+          html += `
+            <div class="section-header">External Resources</div>
+            <table>
+              <tr>
+                <th>Platform</th>
+                <th>Link</th>
+              </tr>`;
+              
+          // Add Reddit link if mentioned
+          if (data.includes("Reddit") || data.includes("r/")) {
+            const redditMatch = data.match(/r\/([a-zA-Z0-9]+)/);
+            const subreddit = redditMatch ? redditMatch[1] : entityName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            html += `
+              <tr>
+                <td>Reddit</td>
+                <td><a href="https://www.reddit.com/search/?q=${entityName}" target="_blank">Reddit discussions</a></td>
+              </tr>`;
+          }
+          
+          // Add Twitter/X link
+          html += `
+            <tr>
+              <td>Twitter/X</td>
+              <td><a href="https://twitter.com/search?q=${encodeURIComponent(entityName)}" target="_blank">Twitter mentions</a></td>
+            </tr>`;
+            
+          // Add Quora link
+          html += `
+            <tr>
+              <td>Quora</td>
+              <td><a href="https://www.quora.com/search?q=${encodeURIComponent(entityName)}" target="_blank">Quora questions</a></td>
+            </tr>`;
+            
+          html += `
+            <tr>
+              <td>Official Website</td>
+              <td><a href="${url}" target="_blank">${url}</a></td>
+            </tr>
+          </table>`;
         }
-      } else {
-        // For non-stock analysis, return data with some basic formatting
+        
+        return html;
+      } catch (error) {
+        console.error("Error formatting research results:", error);
+        // If there's an error in formatting, return the original data wrapped in pre tags
         return `<pre>${data}</pre>`;
       }
     }
