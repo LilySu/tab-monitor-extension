@@ -69,6 +69,21 @@ except Exception as e:
     has_groq_wrapper = False
     load_environment_file()
 
+# Add the repository root to the Python path
+# Assuming mock_analysis_server.py is one level deep from repo root
+file_path = Path(__file__).resolve()  # Get the absolute path of the current file
+repo_root = file_path.parent.parent   # Go up one level to get repo root
+sys.path.insert(0, str(repo_root))    # Add repo root to Python path
+
+# Now we can import modules from pytabmonitor
+from pytabmonitor.Utilities.load_environment_file import (
+    load_environment_file,
+    get_environment_variable)
+from pytabmonitor.GroqAPIWrappers.GroqAPIWrapper import GroqAPIWrapper
+
+# Load environment variables from .env file
+load_environment_file()
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS so the Chrome extension can access this server
 

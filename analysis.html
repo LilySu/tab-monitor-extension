@@ -44,86 +44,74 @@
       padding: 15px;
       border-radius: 4px;
       margin-bottom: 20px;
-      min-height: 200px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
     }
-    .loading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      padding: 30px;
+    .status {
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 5px;
     }
-    .loading-dots {
-      display: flex;
-      justify-content: center;
-      margin-top: 20px;
+    .waiting {
+      background-color: #e6f3ff;
+      color: #2962FF;
     }
-    .dot {
-      width: 12px;
-      height: 12px;
-      margin: 0 5px;
-      background-color: #4285F4;
-      border-radius: 50%;
-      animation: pulse 1.5s infinite;
+    .in-progress {
+      background-color: #e6f3ff;
+      color: #2962FF;
     }
-    .dot:nth-child(2) {
-      animation-delay: 0.2s;
+    .complete {
+      background-color: #d4edda;
+      color: #155724;
     }
-    .dot:nth-child(3) {
-      animation-delay: 0.4s;
+    .progress-container {
+      height: 20px;
+      background-color: #e9ecef;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      overflow: hidden;
     }
-    @keyframes pulse {
-      0% {
-        transform: scale(0.8);
-        opacity: 0.5;
-      }
-      50% {
-        transform: scale(1.2);
-        opacity: 1;
-      }
-      100% {
-        transform: scale(0.8);
-        opacity: 0.5;
-      }
+    .progress-bar {
+      height: 100%;
+      width: 100%;
+      background-color: #0d6efd;
+      animation: progress-animation 1.5s infinite;
     }
-    .footer {
+    @keyframes progress-animation {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    #analysisResult {
+      white-space: pre-wrap;
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 5px;
+      border: 1px solid #dee2e6;
+    }
+    .time-info {
       font-size: 14px;
       color: #666;
-      margin-top: 20px;
-      text-align: center;
+      margin-bottom: 15px;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Analysing...</h1>
+    <h1>Screenshot Analysis</h1>
     
-    <div class="status-container">
-      <div class="status-label">Processing Data</div>
-      <div class="status-time">Started: <span id="startTime">Just now</span></div>
+    <div class="time-info">
+      Started at: <span id="startTime">00:00:00</span>
     </div>
     
-    <div class="content-box">
-      <div class="loading">
-        <h2>Analysis in progress</h2>
-        <p>Please wait while we process the collected information</p>
-        <div class="loading-dots">
-          <div class="dot"></div>
-          <div class="dot"></div>
-          <div class="dot"></div>
-        </div>
-      </div>
+    <div id="analysisStatus" class="status waiting">Waiting for screenshot...</div>
+    
+    <div id="analysisProgress" class="progress-container" style="display: none;">
+      <div class="progress-bar"></div>
     </div>
     
-    <div class="footer">
-      Visit the "Active Window Monitor" tab to view real-time monitoring data
-    </div>
+    <p class="please-wait-message">Please wait while we process the collected information</p>
+    
+    <div id="analysisResult" style="display: none;"></div>
   </div>
-
+  
   <script src="analysis.js"></script>
 </body>
 </html>
