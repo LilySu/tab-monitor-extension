@@ -110,6 +110,9 @@ function captureScreenshot() {
         
         // Send the updated content to the monitor tab
         updateMonitorTab(latestContent);
+        
+        // Send screenshot to analysis
+        sendScreenshotToAnalysis(dataUrl);
       });
     }
   });
@@ -354,3 +357,60 @@ chrome.windows.onRemoved.addListener((windowId) => {
     chrome.storage.local.remove('listeningWindowId');
   }
 });
+
+// Function to send screenshot to analysis server
+function sendScreenshotToAnalysis(screenshotData) {
+  console.log("Sending screenshot to analysis server...");
+  
+  // First update the analysis tab to show "Analysis in Progress"
+  if (analysisTabId) {
+    chrome.tabs.sendMessage(analysisTabId, {
+      action: 'updateAnalysisStatus',
+      status: 'in-progress',
+      message: 'Analysis in progress...'
+    }, response => {
+      if (chrome.runtime.lastError) {
+        console.error("Error updating analysis status:", chrome.runtime.lastError);
+      } else {
+        console.log("Analysis status update sent successfully");
+      }
+    });
+  }
+  
+  // Send the screenshot to our Python server
+  fetch('http://localhost:5000/analyze-screenshot', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      screenshot: screenshotData
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log('Image analysis received (full response):', JSON.stringify(data));
+    
+    // Send the analysis results to the analysis tab
+    if (analysisTabId) {
+      console.log("About to send analysis result to tab:", analysisTabId);
+      chrome.tabs.sendMessage(analysisTabId, {
+        action: 'updateAnalysisResult',
+        status: 'complete',
+        result: data.analysis || "No analysis provided"
+      });
+    }
+  })
+  .catch(error => {
+    console.error('Error analyzing screenshot:', error);
+    
+    // Update analysis tab with the error
+    if (analysisTabId) {
+      chrome.tabs.sendMessage(analysisTabId, {
+        action: 'updateAnalysisStatus',
+        status: 'error',
+        message: 'Error analyzing image: ' + error.message
+      });
+    }
+  });
+}
