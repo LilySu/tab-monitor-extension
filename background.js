@@ -2,6 +2,10 @@
 let listeningWindowId = null;
 let monitorTabId = null;
 let analysisTabId = null;
+let insightsTabId = null;
+
+// Track whether the extension is active or paused
+let extensionActive = true;
 
 console.log("Background script loaded");
 
@@ -21,6 +25,7 @@ function checkForListeningWindow() {
         listeningWindowId = null;
         monitorTabId = null;
         analysisTabId = null;
+        insightsTabId = null;
         resolve(false);
       } else {
         // Window still exists
@@ -58,12 +63,35 @@ function createListeningWindow() {
       }, (tab) => {
         analysisTabId = tab.id;
         console.log("Created analysis tab with ID:", analysisTabId);
+
+        // Create the third tab with our insights page
+        chrome.tabs.create({ 
+          windowId: window.id, 
+          url: 'insights.html',
+          active: false 
+        }, (tab) => {
+          insightsTabId = tab.id;
+          console.log("Created insights tab with ID:", insightsTabId);
+          
+          // Wait a moment for the tab to load, then send the current URL
+          setTimeout(() => {
+            if (latestContent && latestContent.url) {
+              chrome.tabs.sendMessage(insightsTabId, {
+                action: 'analyzeUrl',
+                url: latestContent.url
+              }).catch(err => {
+                console.log("Error sending initial URL to insights tab:", err);
+              });
+            }
+          }, 2000);
+        });
       });
     });
     
     // Store the window ID in local storage for persistence across browser sessions
     chrome.storage.local.set({ 
-      'listeningWindowId': window.id
+      'listeningWindowId': window.id,
+      'extensionActive': true
     });
   });
 }
@@ -73,11 +101,27 @@ function getPageContentScript() {
   const text = document.body ? document.body.innerText : '';
   const preview = text.substring(0, 30) + (text.length > 30 ? '...' : '');
   
+  // Get meta description if available
+  let metaDescription = '';
+  const metaDescTag = document.querySelector('meta[name="description"]');
+  if (metaDescTag) {
+    metaDescription = metaDescTag.getAttribute('content') || '';
+  }
+  
+  // Get main heading if available
+  let mainHeading = '';
+  const h1 = document.querySelector('h1');
+  if (h1) {
+    mainHeading = h1.innerText || '';
+  }
+  
   return {
     url: window.location.href,
     title: document.title,
     text: preview,
-    fullText: text.substring(0, 1000) // Limit to 1000 chars for performance
+    fullText: text.substring(0, 1000), // Limit to 1000 chars for performance
+    metaDescription: metaDescription,
+    mainHeading: mainHeading
   };
 }
 
@@ -91,12 +135,15 @@ let latestContent = {
 
 // Function to capture a screenshot of the active tab
 function captureScreenshot() {
+  // Skip if extension is paused
+  if (!extensionActive) return;
+  
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs.length > 0) {
       const activeTab = tabs[0];
       
       // Skip monitoring our own tabs
-      if (activeTab.id === monitorTabId || activeTab.id === analysisTabId) return;
+      if (activeTab.id === monitorTabId || activeTab.id === analysisTabId || activeTab.id === insightsTabId) return;
       
       chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
         if (chrome.runtime.lastError) {
@@ -110,6 +157,9 @@ function captureScreenshot() {
         
         // Send the updated content to the monitor tab
         updateMonitorTab(latestContent);
+        
+        // Send screenshot to analysis
+        sendScreenshotToAnalysis(dataUrl);
       });
     }
   });
@@ -124,6 +174,8 @@ function updateMonitorTab(content) {
   if (content.text) latestContent.text = content.text;
   if (content.fullText) latestContent.fullText = content.fullText;
   if (content.title) latestContent.title = content.title;
+  if (content.metaDescription) latestContent.metaDescription = content.metaDescription;
+  if (content.mainHeading) latestContent.mainHeading = content.mainHeading;
   if (content.screenshot) latestContent.screenshot = content.screenshot;
   latestContent.timestamp = Date.now();
   
@@ -145,7 +197,7 @@ function forceRefresh() {
       const currentTab = tabs[0];
       
       // Skip our monitor tabs
-      if (currentTab.id === monitorTabId || currentTab.id === analysisTabId) {
+      if (currentTab.id === monitorTabId || currentTab.id === analysisTabId || currentTab.id === insightsTabId) {
         console.log("Can't refresh from our own tabs");
         return;
       }
@@ -184,10 +236,60 @@ function forceRefresh() {
   return true;
 }
 
+// Trigger Insights analysis for the current URL
+function triggerInsightsAnalysis() {
+  console.log("Triggering insights analysis for current URL");
+  
+  // If we have content and the Insights tab exists
+  if (latestContent && insightsTabId) {
+    // Send the URL to the Insights tab
+    chrome.tabs.sendMessage(insightsTabId, {
+      action: 'analyzeUrl',
+      url: latestContent.url
+    }).catch(err => {
+      console.log("Error sending URL to insights tab:", err);
+    });
+    
+    // Activate the Insights tab
+    chrome.tabs.update(insightsTabId, { active: true });
+  }
+}
+
+// Function to toggle extension activity
+function toggleExtensionActive() {
+  extensionActive = !extensionActive;
+  chrome.storage.local.set({ 'extensionActive': extensionActive });
+  
+  // Update the browser action icon to reflect the state
+  updateExtensionIcon();
+  
+  return extensionActive;
+}
+
+// Function to update the extension icon based on active state
+function updateExtensionIcon() {
+  const iconPath = extensionActive ? 
+    { 
+      16: "images/icon16.png",
+      48: "images/icon48.png",
+      128: "images/icon128.png"
+    } : 
+    {
+      16: "images/icon16-disabled.png",
+      48: "images/icon48-disabled.png",
+      128: "images/icon128-disabled.png"
+    };
+  
+  chrome.action.setIcon({ path: iconPath });
+}
+
 // Monitor tab changes to print URL and content
 function monitorActiveTabs() {
   // Listen for tab activation
   chrome.tabs.onActivated.addListener((activeInfo) => {
+    // Skip if extension is paused
+    if (!extensionActive) return;
+    
     chrome.tabs.get(activeInfo.tabId, (tab) => {
       if (chrome.runtime.lastError) {
         console.error("Error getting tab info:", chrome.runtime.lastError);
@@ -195,7 +297,7 @@ function monitorActiveTabs() {
       }
       
       // Skip the monitor tabs themselves
-      if (tab.id === monitorTabId || tab.id === analysisTabId) return;
+      if (tab.id === monitorTabId || tab.id === analysisTabId || tab.id === insightsTabId) return;
       
       console.log("Active tab changed:", tab.url);
       
@@ -229,9 +331,12 @@ function monitorActiveTabs() {
   
   // Also listen for tab URL changes
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    // Skip if extension is paused
+    if (!extensionActive) return;
+    
     if (changeInfo.status === 'complete') {
       // Skip our monitor tabs
-      if (tabId === monitorTabId || tabId === analysisTabId) return;
+      if (tabId === monitorTabId || tabId === analysisTabId || tabId === insightsTabId) return;
       
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0] && tabs[0].id === tabId) {
@@ -269,12 +374,15 @@ function monitorActiveTabs() {
   
   // Set up periodic polling for content changes every 3 seconds
   setInterval(() => {
+    // Skip if extension is paused
+    if (!extensionActive) return;
+    
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length > 0) {
         const currentTab = tabs[0];
         
         // Skip our monitor tabs
-        if (currentTab.id === monitorTabId || currentTab.id === analysisTabId) return;
+        if (currentTab.id === monitorTabId || currentTab.id === analysisTabId || currentTab.id === insightsTabId) return;
         
         // Only execute script on http/https pages
         if (currentTab.url && (currentTab.url.startsWith('http://') || currentTab.url.startsWith('https://'))) {
@@ -296,7 +404,11 @@ function monitorActiveTabs() {
   }, 3000);
   
   // Set up screenshot capture every 10 seconds
-  setInterval(captureScreenshot, 10000);
+  setInterval(() => {
+    // Skip if extension is paused
+    if (!extensionActive) return;
+    captureScreenshot();
+  }, 10000);
 }
 
 // Listen for messages from content scripts
@@ -311,19 +423,52 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const result = forceRefresh();
     sendResponse({ success: result });
     return true;
+  } else if (message.action === 'generateInsights') {
+    triggerInsightsAnalysis();
+    sendResponse({ success: true });
+    return true;
+  } else if (message.action === 'toggleExtension') {
+    const isActive = toggleExtensionActive();
+    sendResponse({ active: isActive });
+    return true;
+  } else if (message.action === 'getExtensionStatus') {
+    sendResponse({ active: extensionActive });
+    return true;
   }
+});
+
+// Listen for browser action clicks (toolbar icon)
+chrome.action.onClicked.addListener((tab) => {
+  // Check if window exists first
+  checkForListeningWindow().then((exists) => {
+    if (!exists) {
+      // Create new window if none exists
+      createListeningWindow();
+    } else {
+      // If window exists, focus it
+      chrome.windows.update(listeningWindowId, { focused: true });
+    }
+  });
 });
 
 // Initialize the extension
 function init() {
   console.log("Initializing extension");
   
-  // Check if we previously created a window
-  chrome.storage.local.get('listeningWindowId', async (data) => {
+  // Check if we previously created a window and get extension active state
+  chrome.storage.local.get(['listeningWindowId', 'extensionActive'], async (data) => {
     if (data.listeningWindowId) {
       listeningWindowId = data.listeningWindowId;
       console.log("Retrieved stored window ID:", listeningWindowId);
     }
+    
+    // Set extension active state
+    if (data.extensionActive !== undefined) {
+      extensionActive = data.extensionActive;
+    }
+    
+    // Update icon based on active state
+    updateExtensionIcon();
     
     // Check if the listening window is already open
     const windowExists = await checkForListeningWindow();
@@ -351,6 +496,94 @@ chrome.windows.onRemoved.addListener((windowId) => {
     listeningWindowId = null;
     monitorTabId = null;
     analysisTabId = null;
+    insightsTabId = null;
     chrome.storage.local.remove('listeningWindowId');
+  }
+});
+
+// Function to send screenshot to analysis server
+function sendScreenshotToAnalysis(screenshotData) {
+  console.log("Sending screenshot to analysis server...");
+  
+  // First update the analysis tab to show "Analysis in Progress"
+  if (analysisTabId) {
+    chrome.tabs.sendMessage(analysisTabId, {
+      action: 'updateAnalysisStatus',
+      status: 'in-progress',
+      message: 'Analysis in progress...'
+    }, response => {
+      if (chrome.runtime.lastError) {
+        console.error("Error updating analysis status:", chrome.runtime.lastError);
+      } else {
+        console.log("Analysis status update sent successfully");
+      }
+    });
+  }
+  
+  // Send the screenshot to our Python server
+  fetch('http://localhost:5000/analyze-screenshot', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      screenshot: screenshotData
+    })
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`Server responded with status: ${response.status}`);
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log('Image analysis received (full response):', JSON.stringify(data));
+    
+    // Send the analysis results to the analysis tab
+    if (analysisTabId) {
+      console.log("About to send analysis result to tab:", analysisTabId);
+      chrome.tabs.sendMessage(analysisTabId, {
+        action: 'updateAnalysisResult',
+        status: 'complete',
+        result: data.analysis || "No analysis provided"
+      });
+    }
+  })
+  .catch(error => {
+    console.error('Error analyzing screenshot:', error);
+    
+    // Update analysis tab with the error
+    if (analysisTabId) {
+      chrome.tabs.sendMessage(analysisTabId, {
+        action: 'updateAnalysisStatus',
+        status: 'error',
+        message: 'Error analyzing image: ' + error.message
+      });
+    }
+  });
+}
+
+// Create a context menu option to generate insights
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: "generate-insights",
+    title: "Generate Insights About This Page",
+    contexts: ["page", "selection", "link"]
+  });
+  
+  chrome.contextMenus.create({
+    id: "generate-insights",
+    title: "Analyze this URL for Stock Info & Research",
+    contexts: ["page", "link"]
+  });
+});
+
+// Listen for context menu clicks
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "generate-insights") {
+    // Always analyze the current URL regardless of text selection
+    triggerInsightsAnalysis();
+  } else if (info.menuItemId === "toggle-extension") {
+    toggleExtensionActive();
   }
 });

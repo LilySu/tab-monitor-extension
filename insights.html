@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Insights</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+      margin: 0;
+    }
+    .container {
+      max-width: 850px;
+      margin: 0 auto;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #4285F4;
+      margin-top: 0;
+    }
+    .url-info {
+      margin-bottom: 20px;
+      padding: 10px;
+      background-color: #e6f3ff;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .status {
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    .waiting {
+      background-color: #e6f3ff;
+      color: #2962FF;
+    }
+    .in-progress {
+      background-color: #e6f3ff;
+      color: #2962FF;
+    }
+    .complete {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .progress-container {
+      height: 20px;
+      background-color: #e9ecef;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 100%;
+      background-color: #0d6efd;
+      animation: progress-animation 1.5s infinite;
+    }
+    @keyframes progress-animation {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .result-container {
+      border: 1px solid #e9ecef;
+      border-radius: 5px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .research-results {
+      white-space: pre-wrap;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .insights-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .time-info {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    /* Table styles for better formatting */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+      font-size: 13px;
+    }
+    th {
+      background-color: #f2f2f2;
+      text-align: left;
+      padding: 8px;
+      border: 1px solid #ddd;
+    }
+    td {
+      padding: 6px 8px;
+      border: 1px solid #ddd;
+    }
+    .company-header {
+      background-color: #4285F4;
+      color: white;
+      padding: 8px;
+      margin-top: 15px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    .section-header {
+      font-weight: bold;
+      margin-top: 15px;
+      margin-bottom: 5px;
+      border-bottom: 2px solid #4285F4;
+      padding-bottom: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="insights-header">
+      <h1>Insights</h1>
+      <div class="time-info">
+        Updated: <span id="updateTime">--:--:--</span>
+      </div>
+    </div>
+    
+    <div class="url-info">
+      Currently analyzing: <span id="currentUrl">Waiting for URL...</span>
+    </div>
+    
+    <div id="researchStatus" class="status waiting">Waiting for page to analyze...</div>
+    
+    <div id="researchProgress" class="progress-container" style="display: none;">
+      <div class="progress-bar"></div>
+    </div>
+    
+    <div class="result-container">
+      <div id="researchResults" class="research-results">
+        Results will appear here automatically once a page is analyzed.
+      </div>
+    </div>
+  </div>
+  
+  <script src="insights.js"></script>
+</body>
+</html>

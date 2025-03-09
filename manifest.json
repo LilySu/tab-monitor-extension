@@ -1,38 +1,38 @@
 {
-    "manifest_version": 3,
-    "name": "Active Window Monitor",
-    "version": "1.0",
-    "description": "Monitors and displays text and screenshots from the active browser window",
-    "permissions": [
-      "tabs",
-      "storage",
-      "scripting",
-      "activeTab"
-    ],
-    "host_permissions": [
-      "<all_urls>"
-    ],
-    "background": {
-      "service_worker": "background.js"
-    },
-    "action": {
-      "default_popup": "popup.html",
-      "default_icon": {
-        "16": "images/icon16.png",
-        "48": "images/icon48.png",
-        "128": "images/icon128.png"
-      }
-    },
-    "content_scripts": [
-      {
-        "matches": ["<all_urls>"],
-        "js": ["content.js"]
-      }
-    ],
-    "web_accessible_resources": [
-      {
-        "resources": ["monitor.html", "monitor.js", "analysis.html", "analysis.js"],
-        "matches": ["<all_urls>"]
-      }
-    ]
-  }
+  "manifest_version": 3,
+  "name": "Active Window Monitor",
+  "version": "1.0",
+  "description": "Monitors and displays text and screenshots from the active browser window",
+  "permissions": [
+    "tabs",
+    "storage",
+    "scripting",
+    "activeTab",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["monitor.html", "monitor.js", "analysis.html", "analysis.js", "insights.html", "insights.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
