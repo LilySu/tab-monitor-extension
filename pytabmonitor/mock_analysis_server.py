@@ -4,6 +4,8 @@ import time
 import sys
 import traceback
 from pathlib import Path
+import base64
+import re
 
 # Add the repository root to the Python path
 # Assuming mock_analysis_server.py is one level deep from repo root
@@ -51,9 +53,25 @@ def create_system_message(content):
     """Helper function to create a system message"""
     return {"role": "system", "content": content}
 
-def create_user_message(content):
-    """Helper function to create a user message"""
-    return {"role": "user", "content": content}
+def create_user_message(text_content, image_base64=None):
+    """Create a user message with optional image content"""
+    if image_base64:
+        # Create a multimodal message with both text and image
+        return {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": text_content},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_base64}"
+                    }
+                }
+            ]
+        }
+    else:
+        # Text-only message
+        return {"role": "user", "content": text_content}
 
 @app.route('/analyze-screenshot', methods=['POST'])
 def analyze_screenshot():
@@ -64,34 +82,56 @@ def analyze_screenshot():
     screenshot_data = None
     if 'screenshot' in data:
         screenshot_length = len(data['screenshot'])
-        screenshot_data = data['screenshot']
+        raw_screenshot = data['screenshot']
         print(f"Received screenshot data ({screenshot_length} bytes)")
+        
+        # Ensure proper base64 formatting
+        # First, check if the data already contains the data URL prefix
+        if raw_screenshot.startswith('data:'):
+            # Extract just the base64 part if it's already a data URL
+            match = re.search(r'base64,(.+)', raw_screenshot)
+            if match:
+                screenshot_data = match.group(1)
+            else:
+                screenshot_data = raw_screenshot
+        else:
+            # If it's raw base64, use it directly
+            screenshot_data = raw_screenshot
+            
+        # Validate that it's proper base64
+        try:
+            # Try to decode to verify it's valid base64
+            base64.b64decode(screenshot_data)
+        except Exception as e:
+            print(f"Invalid base64 data: {str(e)}")
+            screenshot_data = None
     else:
         print("No screenshot data received")
     
     # If GroqAPIWrapper is available, use it to analyze the screenshot
     if groq_api_wrapper and screenshot_data:
         try:
-            # Create messages for the API request
-            system_message = create_system_message(
-                "You are an AI assistant that analyzes screenshots of webpages. "
-                "Describe what you see in the image in detail, including text content, "
-                "layout, and visual elements. Be thorough but concise."
-            )
-            
+            # For vision models, we can't use system messages with images
+            # So we'll incorporate the instructions into the user message
             user_message = create_user_message(
-                "Analyze this webpage screenshot and describe what you see: "
-                "[Screenshot data omitted for brevity]"
+                "You are an AI assistant that analyzes screenshots of webpages. "
+                "Describe what you see in this image in detail, including text content, "
+                "layout, and visual elements. Be thorough but concise.",
+                screenshot_data
             )
             
-            messages = [system_message, user_message]
+            # Create messages array with only the user message
+            messages = [user_message]
             
             print("Sending request to Groq API...")
+            
+            # Update model to vision-capable model
+            groq_api_wrapper.configuration.model = "llama-3.2-11b-vision-preview"
             
             # Get completion from Groq
             result = groq_api_wrapper.create_chat_completion(messages)
             
-            # Extract the response content - result is an object, not a dictionary
+            # Extract the response content
             if hasattr(result, 'choices') and len(result.choices) > 0:
                 analysis_text = result.choices[0].message.content
                 print(f"Successfully received content from Groq API")
@@ -109,6 +149,7 @@ def analyze_screenshot():
             error_detail = str(e)
             stack_trace = traceback.format_exc()
             print(f"Error using Groq API: {error_detail}")
+            print(stack_trace)
             
             # Return the error in the response
             return jsonify({
